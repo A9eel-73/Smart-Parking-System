@@ -1,1 +1,148 @@
 
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
+
+// ---------- WiFi ----------
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
+
+// ---------- Firebase ----------
+#define API_KEY "YOUR_API_KEY"
+#define DATABASE_URL "YOUR_DATABASE_URL"
+
+// ---------- Ultrasonic Pins ----------
+#define TRIG1 2
+#define ECHO1 4
+#define TRIG2 5
+#define ECHO2 18
+#define TRIG3 21
+#define ECHO3 19
+#define TRIG4 22
+#define ECHO4 23
+#define TRIG5 25
+#define ECHO5 26
+
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+const int TOTAL_SLOTS = 5;
+
+String lastSlot1 = "";
+String lastSlot2 = "";
+String lastSlot3 = "";
+String lastSlot4 = "";
+String lastSlot5 = "";
+
+float readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  
+  
+  if (duration == 0) return -1; 
+
+  return duration * 0.034 / 2;
+}
+
+
+String determineStatus(float distance) {
+  if (distance <= 0 || distance > 400) {
+    return "faulty"; 
+  } else if (distance < 10) {
+    return "occupied"; 
+  } else {
+    return "empty"; 
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(TRIG1, OUTPUT);
+  pinMode(ECHO1, INPUT);
+  pinMode(TRIG2, OUTPUT);
+  pinMode(ECHO2, INPUT);
+  pinMode(TRIG3, OUTPUT);
+  pinMode(ECHO3, INPUT);
+  pinMode(TRIG4, OUTPUT);
+  pinMode(ECHO4, INPUT);
+  pinMode(TRIG5, OUTPUT);
+  pinMode(ECHO5, INPUT);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("\nWiFi Connected");
+
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+  Serial.println("Firebase Ready");
+}
+
+void checkAndSend(String path, String currentState, String &lastState) {
+  if (currentState != lastState) {
+    if (Firebase.RTDB.setString(&fbdo, path, currentState)) {
+      Serial.println("Updated " + path + " to " + currentState);
+      lastState = currentState;
+    } else {
+      Serial.println("Error updating " + path);
+    }
+  }
+}
+
+void loop() {
+  
+  float d1 = readDistance(TRIG1, ECHO1); delay(60);
+  float d2 = readDistance(TRIG2, ECHO2); delay(60);
+  float d3 = readDistance(TRIG3, ECHO3); delay(60);
+  float d4 = readDistance(TRIG4, ECHO4); delay(60);
+  float d5 = readDistance(TRIG5, ECHO5);
+
+ 
+  String currentSlot1 = determineStatus(d1);
+  String currentSlot2 = determineStatus(d2);
+  String currentSlot3 = determineStatus(d3);
+  String currentSlot4 = determineStatus(d4);
+  String currentSlot5 = determineStatus(d5);
+
+
+  checkAndSend("parking/slot1", currentSlot1, lastSlot1);
+  checkAndSend("parking/slot2", currentSlot2, lastSlot2);
+  checkAndSend("parking/slot3", currentSlot3, lastSlot3);
+  checkAndSend("parking/slot4", currentSlot4, lastSlot4);
+  checkAndSend("parking/slot5", currentSlot5, lastSlot5);
+
+  
+  int occupied = 0;
+  if (currentSlot1 == "occupied") occupied++;
+  if (currentSlot2 == "occupied") occupied++;
+  if (currentSlot3 == "occupied") occupied++;
+  if (currentSlot4 == "occupied") occupied++;
+  if (currentSlot5 == "occupied") occupied++;
+
+  int available = 0;
+  if (currentSlot1 == "empty") available++;
+  if (currentSlot2 == "empty") available++;
+  if (currentSlot3 == "empty") available++;
+  if (currentSlot4 == "empty") available++;
+  if (currentSlot5 == "empty") available++;
+
+  Firebase.RTDB.setInt(&fbdo, "parking/totalSlots", TOTAL_SLOTS);
+  Firebase.RTDB.setInt(&fbdo, "parking/occupiedSlots", occupied);
+  Firebase.RTDB.setInt(&fbdo, "parking/availableSlots", available);
+
+  delay(2000); 
+}
