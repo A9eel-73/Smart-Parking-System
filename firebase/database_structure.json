@@ -1,0 +1,21 @@
+{
+  "parking": {
+    "slot1": "empty",
+    "slot2": "empty",
+    "slot3": "empty",
+    "slot4": "empty",
+    "slot5": "empty"
+  },
+  "parking_zones": {
+    "zone_a": {
+      "lat": 21.497545,
+      "lng": 39.245734,
+      "name": "Testing Site (Zone A)"
+    },
+    "zone_b": {
+      "lat": 21.497288,
+      "lng": 39.244564,
+      "name": "Science Parking (Zone B)"
+    }
+  }
+}
